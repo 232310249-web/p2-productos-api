@@ -1,11 +1,19 @@
+require("dotenv").config();
+console.log("API_KEY cargada:", Boolean(process.env.API_KEY));
+
 const express = require("express");
 const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 3000; // en la nube el puerto lo asigna la plataforma
+const PORT = process.env.PORT || 3000;
 
-app.use(cors()); // permite peticiones desde otra página (P1)
-app.use(express.json()); // convierte el cuerpo de la petición a objeto JS
+const ORIGENES = (process.env.ORIGEN_PERMITIDO || "")
+    .split(",")
+    .map(origen => origen.trim())
+    .filter(Boolean);
+
+app.use(cors({ origin: ORIGENES }));
+app.use(express.json());
 
 // Datos en memoria (en P3 se pueden pasar a una base de datos)
 let productos = [
@@ -14,6 +22,64 @@ let productos = [
 ];
 
 let siguienteId = 3;
+
+app.post("/api/productos", requiereToken, (req, res) => {
+    const errores = validar(req.body);
+
+    if (errores.length > 0) {
+        return res.status(400).json({ errores });
+    }
+
+    const nuevo = {
+        id: siguienteId++,
+        ...req.body
+    };
+
+    productos.push(nuevo);
+
+    res.status(201).json(nuevo);
+});
+
+app.put("/api/productos/:id", requiereToken, (req, res) => {
+    const id = Number(req.params.id);
+
+    const indice = productos.findIndex(p => p.id === id);
+
+    if (indice === -1) {
+        return res.status(404).json({
+            error: `No existe el producto ${id}`
+        });
+    }
+
+    const errores = validar(req.body);
+
+    if (errores.length > 0) {
+        return res.status(400).json({ errores });
+    }
+
+    productos[indice] = {
+        id,
+        ...req.body
+    };
+
+    res.status(200).json(productos[indice]);
+});
+
+app.delete("/api/productos/:id", requiereToken, (req, res) => {
+    const id = Number(req.params.id);
+
+    const existe = productos.some(p => p.id === id);
+
+    if (!existe) {
+        return res.status(404).json({
+            error: `No existe el producto ${id}`
+        });
+    }
+
+    productos = productos.filter(p => p.id !== id);
+
+    res.status(204).send();
+});
 
 app.get("/", (req, res) => {
     res.json({ mensaje: "API de productos funcionando" });
@@ -59,67 +125,17 @@ function validar(datos) {
     return errores;
 }
 
-// Registrar un producto
-app.post("/api/productos", (req, res) => {
-    const errores = validar(req.body);
+function requiereToken(req, res, next) {
+    if (!process.env.API_KEY ||
+        req.get("x-api-key") !== process.env.API_KEY) {
 
-    if (errores.length > 0) {
-        return res.status(400).json({ errores });
-    }
-
-    const nuevo = {
-        id: siguienteId++,
-        ...req.body
-    };
-
-    productos.push(nuevo);
-
-    res.status(201).json(nuevo);
-});
-
-
- // Actualizar un producto
-app.put("/api/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-
-    const indice = productos.findIndex(p => p.id === id);
-
-    if (indice === -1) {
-        return res.status(404).json({
-            error: `No existe el producto ${id}`
+        return res.status(401).json({
+            error: "Token inválido o ausente"
         });
     }
 
-    const errores = validar(req.body);
-
-    if (errores.length > 0) {
-        return res.status(400).json({ errores });
-    }
-
-    productos[indice] = {
-        id,
-        ...req.body
-    };
-
-    res.status(200).json(productos[indice]);
-});
-
-// Eliminar un producto
-app.delete("/api/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-
-    const existe = productos.some(p => p.id === id);
-
-    if (!existe) {
-        return res.status(404).json({
-            error: `No existe el producto ${id}`
-        });
-    }
-
-    productos = productos.filter(p => p.id !== id);
-
-    res.status(204).send();
-});
+    next();
+}
 
 // Ruta no encontrada
 app.use((req, res) => {
