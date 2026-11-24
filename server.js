@@ -81,18 +81,9 @@ app.delete("/api/productos/:id", requiereToken, (req, res) => {
     res.status(204).send();
 });
 
-app.get("/", (req, res) => {
-    res.json({ mensaje: "API de productos funcionando" });
-});
 
-
- // Consultar todos los productos
-app.get("/api/productos", (req, res) => {
-    res.status(200).json(productos);
-});
-
-// Consultar un producto por ID
-app.get("/api/productos", (req, res) => {
+// Consultar todos los productos o buscar por nombre
+app.get("/api/productos", requiereToken, (req, res) => {
     const buscar = req.query.buscar;
 
     if (buscar) {
@@ -131,6 +122,18 @@ function requiereToken(req, res, next) {
 
         return res.status(401).json({
             error: "Token inválido o ausente"
+        });
+    }
+
+    next();
+}
+
+function verificarAPIKey(req, res, next) {
+    const apiKey = req.headers['x-api-key'];
+
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+        return res.status(401).json({
+            mensaje: "No autorizado"
         });
     }
 
